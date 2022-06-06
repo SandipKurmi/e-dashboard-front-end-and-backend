@@ -5,6 +5,7 @@ const User = require('./db/User');
 const Product = require("./db/Product")
 const app = express();
 const Jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const auth = require('./db/auth.middleware')
 jwtKey = 'secret';
 
@@ -13,9 +14,14 @@ app.use(express.json());
 
 app.post("/api/register", async (req, res) => {
    let user = new User(req.body);
+   console.log(user);
+   let hash = await bcrypt.hashSync(user.password, 10);
+   console.log(hash);
+   user.password = hash;
    let result = await user.save();
-   result = result.toObject();
-   delete result.password;
+   console.log(result);
+//    result = result.toObject();
+//    delete result.password;
    Jwt.sign({result}, jwtKey, {expiresIn:"2h"},(err,token)=>{
     if(err){
         res.send("Something went wrong")  
@@ -25,22 +31,20 @@ app.post("/api/register", async (req, res) => {
 })
 
 app.post("/api/login", async (req, res) => {
-    if (req.body.password && req.body.email) {
-        let user = await User.findOne(req.body).select("-password");
-        console.log(user);
-        if (user) {
-            Jwt.sign({user}, jwtKey, {expiresIn:"2h"},(err,token)=>{
-                if(err){
-                    res.send("Something went wrong")  
-                }
-                res.send({user,token:token})
-            })
-        } else {
-            res.send({ result: "No User found" })
-        }
-    } else {
-        res.send({ result: "No User found" })
+    let user = await User.findOne({email:req.body.email});
+    if(!user){
+        res.send("Invalid email")
     }
+    let result = await bcrypt.compare(req.body.password, user.password);
+    if(!result){
+        res.send("Invalid password")
+    }
+    Jwt.sign({user}, jwtKey, {expiresIn:"2h"},(err,token)=>{
+        if(err){
+            res.send("Something went wrong")  
+        }
+        res.send({user,token:token})
+    })
 });
 
 
